@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -o errexit
+set -o pipefail
+set -o nounset
+
+# Install watchdog if not already installed
+if ! pip list | grep -q "watchdog"; then
+    pip install watchdog
+fi
+
+# Run initial setup
+python /app/manage.py collectstatic --noinput
+python /app/manage.py migrate --noinput
+
+# Define a function to check for migrations
+check_for_migrations() {
+    python /app/manage.py showmigrations --list | grep -q "\[ \]"
+    return $?
+}
+
+# Start watchdog process to monitor for important changes in the background
+python - <<EOF &
+import sys
+import time
+import subprocess
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class MigrationHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path.endswith('.py'):
+            # Check if the file is a migration file
+            if '/migrations/' in event.src_path:
+                logger.info(f"Migration file changed: {event.src_path}")
+                subprocess.run(['pkill', '-HUP', 'gunicorn'])
+                time.sleep(2)  # Give gunicorn time to restart
+                # Check if migrations need to be applied
+                try:
+                    output = subprocess.check_output(['python', '/app/manage.py', 'showmigrations', '--list'])
+                    if b'[ ]' in output:  # Unapplied migrations
+                        logger.info("Detected unapplied migrations, applying them...")
+                        subprocess.run(['python', '/app/manage.py', 'migrate', '--noinput'])
+                except Exception as e:
+                    logger.error(f"Error checking migrations: {e}")
+
+observer = Observer()
+observer.schedule(MigrationHandler(), '/app', recursive=True)
+observer.start()
+
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    observer.stop()
+observer.join()
+EOF
+
+# Start Gunicorn with hot reloading
+exec /opt/venv/bin/gunicorn config.asgi --config config/gunicorn.config.py --chdir=/app

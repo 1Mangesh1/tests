@@ -1,0 +1,97 @@
+log:
+  level: INFO
+
+entryPoints:
+  web:
+    # http
+    address: ":80"
+    http:
+      # https://docs.traefik.io/routing/entrypoints/#entrypoint
+      redirections:
+        entryPoint:
+          to: web-secure
+
+  web-secure:
+    # https
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    # https://docs.traefik.io/master/https/acme/#lets-encrypt
+    acme:
+      email: "support@houseworksinc.co"
+      storage: /etc/traefik/acme/acme.json
+      # https://docs.traefik.io/master/https/acme/#httpchallenge
+      httpChallenge:
+        entryPoint: web
+
+http:
+  routers:
+    metabase-router:
+      rule: "Host(`staging.rbp-metabase.houseworksinc.co`)"
+      entryPoints:
+        - web-secure
+      service: metabase
+      tls:
+        certResolver: letsencrypt
+
+    web-secure-router:
+      rule: "Host(`staging.rbp.houseworksinc.co`) && PathPrefix(`/api/`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - csrf
+      service: django
+      tls:
+        # https://docs.traefik.io/master/routing/routers/#certresolver
+        certResolver: letsencrypt
+
+
+    django-admin-router:
+      rule: "Host(`staging.rbp.houseworksinc.co`) && PathPrefix(`/qwertyuiopmnbvcxzdjangoadmin`)"
+      entryPoints:
+        - web-secure
+      middlewares:
+        - csrf
+      service: django
+      tls:
+        certResolver: letsencrypt
+
+    frontend-router:
+      rule: "Host(`staging.rbp.houseworksinc.co`)"  # host rule for frontend
+      entryPoints:
+        - web-secure
+      service: frontend
+      tls:
+        # https://docs.traefik.io/master/routing/routers/#certresolver
+        certResolver: letsencrypt
+
+  middlewares:
+    csrf:
+      # https://docs.traefik.io/master/middlewares/headers/#hostsproxyheaders
+      # https://docs.djangoproject.com/en/dev/ref/csrf/#ajax
+      headers:
+        hostsProxyHeaders: ["X-CSRFToken"]
+
+  services:
+    django:
+      loadBalancer:
+        servers:
+          - url: http://django:5000
+
+    frontend:
+      loadBalancer:
+        servers:
+          - url: http://frontend:3000
+
+    metabase:
+      loadBalancer:
+        servers:
+          - url: http://metabase:3000
+
+
+providers:
+  # https://docs.traefik.io/master/providers/file/
+  file:
+    filename: /etc/traefik/traefik.yml
+    watch: true

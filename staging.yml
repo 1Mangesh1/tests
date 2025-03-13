@@ -1,0 +1,67 @@
+version: "3"
+
+volumes:
+  staging_postgres_data_backups: {}
+  staging_postgres_data: {}
+  staging_traefik: {}
+
+services:
+  django: &django
+    build:
+      context: .
+      dockerfile: ./compose/staging/django/Dockerfile
+    image: my_awesome_project_staging_django
+    depends_on:
+      - postgres
+    env_file:
+      - ./.envs/.staging/.django
+      - ./.envs/.staging/.postgres
+    command: /start
+    volumes:
+      - .:/app:rw
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./compose/staging/postgres/Dockerfile
+    image: my_awesome_project_staging_postgres
+    env_file:
+      - ./.envs/.staging/.postgres
+
+  traefik:
+    build:
+      context: .
+      dockerfile: ./compose/staging/traefik/Dockerfile
+    image: my_awesome_project_staging_traefik
+    depends_on:
+      - django
+    volumes:
+      - staging_traefik:/etc/traefik/acme:z
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+
+  celeryworker:
+    <<: *django
+    depends_on:
+      - django
+      - postgres
+    image: my_awesome_project_staging_celeryworker
+    command: /start-celeryworker
+
+  celerybeat:
+    <<: *django
+    depends_on:
+      - django
+      - postgres
+    image: my_awesome_project_staging_celerybeat
+    command: /start-celerybeat
+
+  awscli:
+    build:
+      context: .
+      dockerfile: ./compose/staging/aws/Dockerfile
+    env_file:
+      - ./.envs/.staging/.django
+    volumes:
+      - staging_postgres_data_backups:/backups:z

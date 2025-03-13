@@ -1,0 +1,6 @@
+# PRECAUTION: avoid production dependencies that aren't in development
+
+-r production.txt
+
+# Hot reloading
+watchdog==3.0.0  # https://github.com/gorakhargosh/watchdog 
