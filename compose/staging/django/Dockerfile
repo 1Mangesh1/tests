@@ -31,8 +31,6 @@ COPY ./requirements /requirements
 RUN uv pip install --no-cache-dir -r /requirements/${BUILD_ENVIRONMENT}.txt \
     && rm -rf /root/.cache/uv
 
-RUN playwright install chromium && \
-    playwright install-deps chromium
 
 # Python 'run' stage ----------------------------------------------
 FROM python-base AS python-run-stage
@@ -50,13 +48,6 @@ RUN addgroup --system django \
     && adduser --system --ingroup django django
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    # Chromium dependencies for playwright
-    libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libc6 libcairo2 \
-    libcups2 libdbus-1-3 libdrm2 libexpat1 libgbm1 libgcc1 libglib2.0-0 \
-    libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 \
-    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
-    libxext6 libxfixes3 libxrandr2 fonts-liberation \
-    libasound2 libxkbcommon0 \
     # Dependencies for psycopg2
     libpq-dev
 
@@ -83,8 +74,7 @@ RUN sed -i 's/\r$//g' /entrypoint \
 RUN apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy playwright cache
-COPY --chown=django:django --from=python-build-stage /root/.cache/ms-playwright /home/django/.cache/ms-playwright
+
 
 # Copy application code to WORKDIR
 COPY --chown=django:django . ${APP_HOME}
