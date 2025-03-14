@@ -3,4 +3,4 @@
 -r production.txt
 
 # Hot reloading
-watchdog==3.0.0  # https://github.com/gorakhargosh/watchdog 
+watchdog==6.0.0  # https://github.com/gorakhargosh/watchdog 
